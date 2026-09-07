@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Image Zoom</title>
+    <style>
+        /* Center everything on the page */
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f0f0f0;
+            font-family: sans-serif;
+        }
+
+        /* Container that restricts the image size and hides overflow when zoomed */
+        .image-container {
+            width: 500px;
+            height: 350px;
+            overflow: hidden;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            background-color: #fff;
+            position: relative;
+            cursor: zoom-in;
+        }
+
+        /* Base image styling */
+        .zoom-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.1s ease-out; /* Smooth movement */
+            transform-origin: center center;
+        }
+
+        /* Active zoom state managed by JavaScript */
+        .image-container.is-zoomed {
+            cursor: zoom-out;
+        }
+
+        .image-container.is-zoomed .zoom-image {
+            /* Adjust scale(2) to make it more or less zoomed in */
+            transform: scale(2); 
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Put your image link in the src attribute below -->
+    <div class="image-container" id="zoomContainer">
+        <img src="https://deltarune.wiki/images/Ferris_Wheel_soundtrack.png?cb=7cpc1b&h=thumb.php&f=Ferris_Wheel_soundtrack.png" alt="Zoomable target" class="zoom-image" id="zoomImage">
+    </div>
+
+    <script>
+        const container = document.getElementById('zoomContainer');
+        const image = document.getElementById('zoomImage');
+
+        // Toggle zoom state when clicked
+        container.addEventListener('click', (e) => {
+            container.classList.toggle('is-zoomed');
+            
+            // Reset position if zooming out
+            if (!container.classList.contains('is-zoomed')) {
+                image.style.transformOrigin = 'center center';
+            } else {
+                // Instantly pan to where the user clicked upon zooming in
+                movePan(e);
+            }
+        });
+
+        // Track mouse movement to pan the image when zoomed in
+        container.addEventListener('mousemove', (e) => {
+            if (container.classList.contains('is-zoomed')) {
+                movePan(e);
+            }
+        });
+
+        // Function to calculate and update the zoom focus position
+        function movePan(e) {
+            const rect = container.getBoundingClientRect();
+            
+            // Calculate mouse position relative to the container (0 to 100%)
+            const x = ((e.clientX - rect.left) / rect.width) * 100;
+            const y = ((e.clientY - rect.top) / rect.height) * 100;
+            
+            // Shift the transform origin to match the mouse coordinates
+            image.style.transformOrigin = `${x}% ${y}%`;
+        }
+
+        // Reset if mouse leaves the container entirely
+        container.addEventListener('mouseleave', () => {
+            container.classList.remove('is-zoomed');
+            image.style.transformOrigin = 'center center';
+        });
+    </script>
+
+</body>
+</html>
