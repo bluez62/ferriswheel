@@ -3,160 +3,148 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced Fullscreen Image Zoom</title>
+    <title>Fixed Fullscreen Image Zoom</title>
     <style>
-        /* Remove default margins and hide scrollbars */
+        /* Force full screen and prevent standard scrolling */
         body, html {
             margin: 0;
             padding: 0;
             width: 100vw;
             height: 100vh;
             overflow: hidden;
-            background-color: #111; /* Dark background looks better fullscreen */
+            background-color: #111;
             display: flex;
             justify-content: center;
             align-items: center;
-            user-select: none; /* Prevents accidental text/image selection while dragging */
+            user-select: none;
+            -webkit-user-select: none;
         }
 
-        /* Container takes up 100% of the viewport */
+        /* Container scales to the exact window size */
         .image-container {
             width: 100vw;
             height: 100vh;
             overflow: hidden;
             position: relative;
-            cursor: zoom-in;
+            cursor: grab;
         }
 
-        /* Image handles the scaling and translation smoothly */
+        .image-container:active {
+            cursor: grabbing;
+        }
+
+        /* Image default centered positioning */
         .zoom-image {
             width: 100%;
             height: 100%;
-            object-fit: contain; /* Keeps image proportions without cropping */
-            transform-origin: 0 0; /* Necessary for accurate mouse/wheel tracking */
-            transition: transform 0.05s ease-out; /* Keeps adjustments buttery smooth */
+            object-fit: contain;
+            transform-origin: center center;
             will-change: transform;
-        }
-
-        /* Grabbing cursor state while dragging */
-        .image-container.is-dragging {
-            cursor: grabbing;
         }
     </style>
 </head>
 <body>
 
     <div class="image-container" id="zoomContainer">
-        <!-- Replace with your image path -->
-        <img src="https://deltarune.wiki/images/Ferris_Wheel_soundtrack.png?cb=7cpc1b&h=thumb.php&f=Ferris_Wheel_soundtrack.png" alt="Fullscreen target" class="zoom-image" id="zoomImage">
+        <img src="my-photo.jpg" alt="Fullscreen target" class="zoom-image" id="zoomImage"
     </div>
 
     <script>
         const container = document.getElementById('zoomContainer');
         const image = document.getElementById('zoomImage');
 
-        // State tracking variables
+        // State positions
         let scale = 1;
-        let pointX = 0;
-        let pointY = 0;
+        let translateX = 0;
+        let translateY = 0;
+        
+        let isDragging = false;
         let startX = 0;
         let startY = 0;
-        let isDragging = false;
 
-        // Configuration limits
+        // Limits
         const MIN_SCALE = 1;
-        const MAX_SCALE = 6; // Feel free to increase this for deeper zoom
+        const MAX_SCALE = 8; // Allows up to 8x close-up zoom
 
-        // Helper function to update the CSS Transform property dynamically
-        function updateTransform() {
-            image.style.transform = `translate(${pointX}px, ${pointY}px) scale(${scale})`;
+        // Applies updates reliably via CSS transform matrix
+        function applyTransform() {
+            image.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
         }
 
-        // --- WHEEL ZOOM (Scroll to zoom deeper) ---
+        // --- 1. MOUSE WHEEL ZOOM ---
         container.addEventListener('wheel', (e) => {
             e.preventDefault();
+
+            // Calculate zoom target step
+            const zoomFactor = 0.15;
+            let targetScale = scale + (e.deltaY < 0 ? zoomFactor : -zoomFactor);
             
-            // Adjust zoom speed factor
-            const xs = (e.clientX - pointX) / scale;
-            const ys = (e.clientY - pointY) / scale;
-            const delta = -e.deltaY;
+            // Constrain zoom levels
+            targetScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, targetScale));
 
-            if (delta > 0) {#
-                scale = Math.min(MAX_SCALE, scale + 0.3);
-            } else {
-                scale = Math.max(MIN_SCALE, scale - 0.3);
+            if (targetScale === scale) return;
+
+            // Get mouse position relative to image center bounding box
+            const rect = image.getBoundingClientRect();
+            const mouseX = e.clientX - (rect.left + rect.width / 2);
+            const mouseY = e.clientY - (rect.top + rect.height / 2);
+
+            // Adjust offset positions so it zooms focused directly under the cursor mouse point
+            translateX -= (mouseX / scale) * (targetScale - scale);
+            translateY -= (mouseY / scale) * (targetScale - scale);
+            
+            scale = targetScale;
+
+            // Reset positioning if fully zoomed back out
+            if (scale <= MIN_SCALE) {
+                scale = 1;
+                translateX = 0;
+                translateY = 0;
             }
 
-            // Reposition the image offset so it zooms directly into the mouse cursor
-            pointX = e.clientX - xs * scale;
-            pointY = e.clientY - ys * scale;
-
-            // Restrict bounds if zoomed completely out
-            if (scale === 1) {
-                pointX = 0;
-                pointY = 0;
-                container.style.cursor = 'zoom-in';
-            } else {
-                container.style.cursor = 'grab';
-            }
-
-            updateTransform();
+            applyTransform();
         }, { passive: false });
 
-        // --- CLICK TO TOGGLE ZOOM ---
-        container.addEventListener('click', (e) => {
-            // Ignore the toggle if we just finished dragging the image
-            if (isDragging) return;
-
-            if (scale === 1) {
-                // Zoom in to a comfortable starting level (e.g., 2.5x)
-                scale = 2.5;
-                const xs = e.clientX / 1;
-                const ys = e.clientY / 1;
-                pointX = e.clientX - xs * scale;
-                pointY = e.clientY - ys * scale;
-                container.style.cursor = 'grab';
-            } else {
-                // Zoom completely back out
+        // --- 2. DOUBLE CLICK TO QUICK SNAP ZOOM ---
+        container.addEventListener('dblclick', (e) => {
+            if (scale > 1) {
+                // If already zoomed in, snap back out entirely
                 scale = 1;
-                pointX = 0;
-                pointY = 0;
-                container.style.cursor = 'zoom-in';
+                translateX = 0;
+                translateY = 0;
+            } else {
+                // Quick snap into a 3x magnification factor
+                scale = 3;
+                const rect = image.getBoundingClientRect();
+                const mouseX = e.clientX - (rect.left + rect.width / 2);
+                const mouseY = e.clientY - (rect.top + rect.height / 2);
+                translateX = -mouseX * (scale - 1);
+                translateY = -mouseY * (scale - 1);
             }
-            updateTransform();
+            applyTransform();
         });
 
-        // --- CLICK & DRAG PANNING ---
+        // --- 3. CLICK & DRAG PANNING ---
         container.addEventListener('mousedown', (e) => {
-            if (scale === 1) return; // Don't drag if zoomed out
+            if (scale === 1) return; // Disable dragging if completely zoomed out
             
-            isDragging = false; // Reset toggle flag
-            startX = e.clientX - pointX;
-            startY = e.clientY - pointY;
-            
-            // We attach mousemove to window so the drag doesn't snap if mouse leaves container
-            window.addEventListener('mousemove', mouseMoveHandler);
-            window.addEventListener('mouseup', mouseUpHandler);
+            isDragging = true;
+            startX = e.clientX - translateX;
+            startY = e.clientY - translateY;
         });
 
-        function mouseMoveHandler(e) {
-            isDragging = true;
-            container.classList.add('is-dragging');
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
             
-            pointX = e.clientX - startX;
-            pointY = e.clientY - startY;
+            translateX = e.clientX - startX;
+            translateY = e.clientY - startY;
             
-            updateTransform();
-        }
+            applyTransform();
+        });
 
-        function mouseUpHandler() {
-            container.classList.remove('is-dragging');
-            window.removeEventListener('mousemove', mouseMoveHandler);
-            window.removeEventListener('mouseup', mouseUpHandler);
-            
-            // Short timeout ensures the click event knows a drag just finished
-            setTimeout(() => { isDragging = false; }, 50);
-        }
+        window.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
     </script>
 
 </body>
